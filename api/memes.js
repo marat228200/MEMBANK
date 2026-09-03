@@ -20,6 +20,7 @@ export default async function handler(req, res) {
         author: m.author,
         authorId: m.author_id,
         likes: m.likes,
+        reports: m.reports || 0,
         timestamp: new Date(m.created_at).getTime(),
       })),
     });
@@ -44,7 +45,15 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: "blocked" });
       }
 
-      const check = await moderateImage(imageData);
+      // Автопроверка через ИИ — необязательна. Если ANTHROPIC_API_KEY не
+      // задан (или проверка не удалась технически), просто пропускаем её:
+      // мем публикуется без автопроверки, модерируется вручную через жалобы/админку.
+      let check = { flagged: false, reason: "" };
+      try {
+        check = await moderateImage(imageData);
+      } catch (e) {
+        check = { flagged: false, reason: "" };
+      }
       if (check.flagged) {
         return res.status(422).json({ error: "flagged", reason: check.reason });
       }
@@ -89,6 +98,7 @@ export default async function handler(req, res) {
           author: inserted.author,
           authorId: inserted.author_id,
           likes: inserted.likes,
+          reports: 0,
           timestamp: new Date(inserted.created_at).getTime(),
         },
       });
