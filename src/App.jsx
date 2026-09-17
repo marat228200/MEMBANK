@@ -13,6 +13,7 @@ import {
   Lock,
   LogOut,
   Ban,
+  Flag,
 } from "lucide-react";
 
 const DISPLAY_FONT =
@@ -103,7 +104,7 @@ function TapeStrip({ rotate }) {
   );
 }
 
-function MemeCard({ meme, onLike, liking, isAdmin, onDelete, onBlockAuthor, blocked }) {
+function MemeCard({ meme, onLike, liking, isAdmin, onDelete, onBlockAuthor, blocked, onReport, reported }) {
   const rot = rotationFor(meme.id);
   return (
     <div
@@ -118,7 +119,15 @@ function MemeCard({ meme, onLike, liking, isAdmin, onDelete, onBlockAuthor, bloc
     >
       <TapeStrip rotate={rot > 0 ? -8 : 8} />
       {isAdmin && (
-        <div className="flex items-center gap-1 mb-2 justify-end">
+        <div className="flex items-center gap-1 mb-2 justify-end flex-wrap">
+          {meme.reports > 0 && (
+            <span
+              style={{ fontFamily: MONO_FONT, fontSize: 10, color: RED }}
+              className="flex items-center gap-1"
+            >
+              <Flag size={11} /> жалоб: {meme.reports}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => onBlockAuthor(meme.authorId)}
@@ -178,25 +187,45 @@ function MemeCard({ meme, onLike, liking, isAdmin, onDelete, onBlockAuthor, bloc
         <span style={{ fontFamily: MONO_FONT, fontSize: 11, color: "#8a8477" }}>
           {meme.author ? `от ${meme.author}` : "аноним"}
         </span>
-        <button
-          onClick={() => onLike(meme.id)}
-          disabled={liking === meme.id}
-          style={{
-            fontFamily: MONO_FONT,
-            fontWeight: 700,
-            fontSize: 13,
-            color: INK,
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          <Heart size={16} fill={meme.likes > 0 ? RED : "none"} color={meme.likes > 0 ? RED : INK} />
-          {meme.likes || 0}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => onReport(meme.id)}
+            disabled={reported}
+            title={reported ? "Жалоба уже отправлена" : "Пожаловаться на мем"}
+            style={{
+              fontFamily: MONO_FONT,
+              fontSize: 11,
+              color: reported ? "#c9c2b3" : "#8a8477",
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              background: "transparent",
+              border: "none",
+              cursor: reported ? "default" : "pointer",
+            }}
+          >
+            <Flag size={13} /> {reported ? "пожаловались" : "пожаловаться"}
+          </button>
+          <button
+            onClick={() => onLike(meme.id)}
+            disabled={liking === meme.id}
+            style={{
+              fontFamily: MONO_FONT,
+              fontWeight: 700,
+              fontSize: 13,
+              color: INK,
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            <Heart size={16} fill={meme.likes > 0 ? RED : "none"} color={meme.likes > 0 ? RED : INK} />
+            {meme.likes || 0}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -223,6 +252,13 @@ export default function App() {
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [adminError, setAdminError] = useState(null);
   const [promoteIdInput, setPromoteIdInput] = useState("");
+  const [reportedIds, setReportedIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("reported_ids") || "[]");
+    } catch (e) {
+      return [];
+    }
+  });
   const fileInputRef = useRef(null);
 
   const loadMemes = useCallback(async () => {
@@ -327,6 +363,21 @@ export default function App() {
     setLikingId(null);
   };
 
+  const handleReport = async (id) => {
+    if (reportedIds.includes(id)) return;
+    const nextReported = [...reportedIds, id];
+    setReportedIds(nextReported);
+    try {
+      localStorage.setItem("reported_ids", JSON.stringify(nextReported));
+    } catch (e) {
+      // ignore storage errors
+    }
+    const { ok, data } = await api("/api/report", { id });
+    if (ok) {
+      setMemes((cur) => cur.map((m) => (m.id === id ? { ...m, reports: data.reports } : m)));
+    }
+  };
+
   const handleDeleteMeme = async (id) => {
     const prev = memes;
     setMemes((cur) => cur.filter((m) => m.id !== id));
@@ -388,7 +439,9 @@ export default function App() {
     if (!ok) setAdminIds(prev);
   };
 
-  const sorted = [...memes].sort((a, b) =>
+  const HIDE_THRESHOLD = 3;
+  const visibleMemes = isAdmin ? memes : memes.filter((m) => (m.reports || 0) < HIDE_THRESHOLD);
+  const sorted = [...visibleMemes].sort((a, b) =>
     sort === "top" ? (b.likes || 0) - (a.likes || 0) : b.timestamp - a.timestamp
   );
 
@@ -717,6 +770,8 @@ export default function App() {
                 onDelete={handleDeleteMeme}
                 onBlockAuthor={handleBlockAuthor}
                 blocked={meme.authorId ? blockedIds.includes(meme.authorId) : false}
+                onReport={handleReport}
+                reported={reportedIds.includes(meme.id)}
               />
             ))}
           </div>
@@ -724,4 +779,4 @@ export default function App() {
       </main>
     </div>
   );
-                                         }
+              }
