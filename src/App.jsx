@@ -14,6 +14,7 @@ import {
   LogOut,
   Ban,
   Flag,
+  Bell,
 } from "lucide-react";
 
 const DISPLAY_FONT =
@@ -378,6 +379,13 @@ export default function App() {
     }
   };
 
+  const handleResetReports = async (id) => {
+    const prev = memes;
+    setMemes((cur) => cur.map((m) => (m.id === id ? { ...m, reports: 0 } : m)));
+    const { ok } = await api("/api/admin", { action: "reset-reports", visitorId, memeId: id });
+    if (!ok) setMemes(prev);
+  };
+
   const handleDeleteMeme = async (id) => {
     const prev = memes;
     setMemes((cur) => cur.filter((m) => m.id !== id));
@@ -440,6 +448,7 @@ export default function App() {
   };
 
   const HIDE_THRESHOLD = 3;
+  const pendingReports = memes.filter((m) => (m.reports || 0) >= HIDE_THRESHOLD);
   const visibleMemes = isAdmin ? memes : memes.filter((m) => (m.reports || 0) < HIDE_THRESHOLD);
   const sorted = [...visibleMemes].sort((a, b) =>
     sort === "top" ? (b.likes || 0) - (a.likes || 0) : b.timestamp - a.timestamp
@@ -477,6 +486,44 @@ export default function App() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && pendingReports.length > 0 && (
+              <button
+                onClick={() => setAdminOpen(true)}
+                title="Мемы на проверке"
+                style={{
+                  border: `3px solid ${INK}`,
+                  background: RED,
+                  color: "#fff",
+                  boxShadow: "3px 3px 0px rgba(28,27,24,0.9)",
+                  position: "relative",
+                }}
+                className="p-2 flex items-center justify-center"
+              >
+                <Bell size={16} />
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -8,
+                    right: -8,
+                    background: YELLOW,
+                    color: INK,
+                    border: `2px solid ${INK}`,
+                    borderRadius: "999px",
+                    fontFamily: MONO_FONT,
+                    fontWeight: 700,
+                    fontSize: 10,
+                    minWidth: 18,
+                    height: 18,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0 3px",
+                  }}
+                >
+                  {pendingReports.length}
+                </span>
+              </button>
+            )}
             <button
               onClick={() => setAdminOpen((v) => !v)}
               title="Модерация"
@@ -549,6 +596,62 @@ export default function App() {
                     <LogOut size={13} /> выйти
                   </button>
                 </div>
+
+                {pendingReports.length > 0 && (
+                  <div className="mb-4">
+                    <p style={{ fontFamily: MONO_FONT, fontSize: 12, color: RED, fontWeight: 700 }} className="mb-2 flex items-center gap-1">
+                      <Bell size={13} /> На проверке (скрыты из ленты): {pendingReports.length}
+                    </p>
+                    <div className="space-y-2">
+                      {pendingReports.map((m) => (
+                        <div
+                          key={m.id}
+                          style={{ border: `2px solid ${INK}`, background: "#fff" }}
+                          className="p-2 flex items-center gap-2"
+                        >
+                          <img
+                            src={m.imageUrl}
+                            alt={m.caption || "мем"}
+                            style={{ width: 44, height: 44, objectFit: "cover", border: `1px solid ${INK}` }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p style={{ fontFamily: MONO_FONT, fontSize: 11, color: INK }} className="truncate">
+                              {m.caption || "без подписи"}
+                            </p>
+                            <p style={{ fontFamily: MONO_FONT, fontSize: 10, color: RED }}>
+                              жалоб: {m.reports}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleResetReports(m.id)}
+                            title="Это ложная жалоба — вернуть в ленту"
+                            style={{ fontFamily: MONO_FONT, fontSize: 10, border: `1px solid ${INK}`, background: "#fff" }}
+                            className="px-2 py-1 whitespace-nowrap"
+                          >
+                            вернуть
+                          </button>
+                          <button
+                            onClick={() => handleBlockAuthor(m.authorId)}
+                            disabled={m.authorId ? blockedIds.includes(m.authorId) : true}
+                            title="Заблокировать автора"
+                            style={{ fontFamily: MONO_FONT, fontSize: 10, border: `1px solid ${INK}`, background: "#fff" }}
+                            className="px-2 py-1 disabled:opacity-50"
+                          >
+                            <Ban size={11} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMeme(m.id)}
+                            title="Удалить мем"
+                            style={{ fontFamily: MONO_FONT, fontSize: 10, border: `1px solid ${INK}`, background: RED, color: "#fff" }}
+                            className="px-2 py-1"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="mb-4">
                   <p style={{ fontFamily: MONO_FONT, fontSize: 12, color: "#8a8477" }} className="mb-2">
@@ -779,4 +882,4 @@ export default function App() {
       </main>
     </div>
   );
-              }
+    }
