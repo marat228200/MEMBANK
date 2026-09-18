@@ -86,5 +86,13 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true });
   }
 
+  if (action === "reset-reports") {
+    const { memeId } = req.body || {};
+    if (!memeId) return res.status(400).json({ error: "missing_meme_id" });
+    const { error } = await supabase.from("memes").update({ reports: 0 }).eq("id", memeId);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ success: true });
+  }
+
   return res.status(400).json({ error: "unknown_action" });
 }
